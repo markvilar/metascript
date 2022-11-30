@@ -1,81 +1,21 @@
 import argparse
-import os
+import os 
 import time
 import xml.etree.ElementTree as ET
 
 from xml.dom import minidom
 
-from dataclasses import dataclass
 from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import open3d
-import pandas as pd
-import pymap3d as pmp
 import tqdm
 
-@dataclass
-class TransformChunk():
-    label: str=""
-    cloud: open3d.geometry.PointCloud=None
-    poses: pd.DataFrame=None
+import geodesic 
 
-    def get_label(self):
-        return self.label
-
-    def get_poses(self):
-        return self.poses
-
-    def set_poses(self, poses):
-        self.poses = poses
-
-    def get_points(self):
-        return np.asarray(self.cloud.points)
-
-    def set_points(self, points: np.ndarray):
-        self.cloud.points = open3d.utility.Vector3dVector(points)
-
-    def get_normals(self):
-        return np.asarray(self.cloud.normals)
-
-    def set_normals(self, normals: np.ndarray):
-        self.cloud.normals = open3d.utility.Vector3dVector(normals)
-
-    def get_cloud(self):
-        return self.cloud
-
-    def get_centroid(self):
-        points = self.get_points()
-        min_values = np.amin(points, axis=0)
-        max_values = np.amax(points, axis=0)
-        return np.mean([min_values, max_values], axis=0)
-
-    def load_cloud(self, path: Path):
-        extension = os.path.splitext(path)[-1]
-        assert extension == ".ply", "invalid model file format"
-
-        # Extract dataset label from model file
-        self.label = os.path.basename(path).split("_dense_global")[0]
-
-        # Read cloud and transform from lonlat to latlon
-        self.cloud = open3d.io.read_point_cloud(str(path))
-        
-        points = self.get_points()
-        normals = self.get_normals()
-
-        points[:, [0, 1]] = points[:, [1, 0]]
-        normals[:, [0, 1]] = normals[:, [1, 0]]
-        normals[:, 2] = -normals[:, 2]
-
-        self.set_points(points)
-        self.set_normals(normals)
-
-    def load_poses(self, path: Path):
-        extension = os.path.splitext(path)[-1]
-        assert extension == ".csv", "invalid poses file format"
-        self.poses = pd.read_csv(path)
-
+from chunk import TransformChunk
 
 def write_crs(origin: np.ndarray, local_frame: str, local_epsg: int,
     global_frame: str, global_epsg: int, path: Path):
@@ -107,18 +47,6 @@ def write_crs(origin: np.ndarray, local_frame: str, local_epsg: int,
 
     with open(path, "w") as file:
         file.write(doc.toprettyxml(indent="  "))
-
-
-def geodesic2ned(points: np.ndarray, origin: np.ndarray):
-    vfunc = np.vectorize(pmp.geodetic2ned)
-    transformed = np.zeros(shape=points.shape, dtype=np.float64)
-    for i, point in enumerate(tqdm.tqdm(points, desc="Transforming...")):
-        ned = vfunc(point[0], point[1], point[2], 
-                origin[0], origin[1], origin[2])
-        ned_vec = np.asarray(ned)
-        transformed[i, :] = np.asarray(ned)
-
-    return transformed
 
 
 def transform_local(args):
@@ -166,13 +94,22 @@ def transform_local(args):
     for chunk in chunks:
         poses = chunk.get_poses()
         
-        # Transform poses
-        positions = poses[["latitude", "longitude", "altitude"]]
-        transformed_positions = geodesic2ned(positions.to_numpy(), origin)
+        # Get pose positions
+        positions = poses[["latitude", "longitude", "altitude"]].to_numpy()
+        
+        # Transform to NED
+        norths, easts, downs = geodesic.geodetic2ned(
+                positions[:, 0], 
+                positions[:, 1], 
+                positions[:, 2], 
+                origin[0], 
+                origin[1], 
+                origin[2]
+            )
 
-        poses["north"] = transformed_positions[:, 0]
-        poses["east"] = transformed_positions[:, 1]
-        poses["down"] = transformed_positions[:, 2]
+        poses["north"] = norths
+        poses["east"] = easts
+        poses["down"] = downs
 
         transformed_poses = poses[["label", "north", "east", "down", "roll",
             "pitch", "yaw"]]
@@ -184,8 +121,21 @@ def transform_local(args):
     for chunk in chunks:
         points = chunk.get_points()
         
-        # TODO: Debug, remove print
-        transformed_points = geodesic2ned(points, origin)
+        # Transform to NED
+        norths, easts, downs = geodesic.geodetic2ned(
+                points[:, 0], 
+                points[:, 1],
+                points[:, 2],
+                origin[0], 
+                origin[1], 
+                origin[2]
+            )
+
+        transformed_points = np.full((len(norths), 3), 0.0)
+        transformed_points[:, 0] = norths
+        transformed_points[:, 1] = easts
+        transformed_points[:, 2] = downs
+
         chunk.set_points(transformed_points)
         cloud = chunk.get_cloud()
 
@@ -210,11 +160,10 @@ def transform_local(args):
         if do_save:
             fig.savefig(args.output / "{0}.png".format(chunk.get_label()))
 
-        
-    
     do_plot = False
     if do_plot:
         plt.show()
+
 
 def main():
     parser = argparse.ArgumentParser()
