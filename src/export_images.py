@@ -6,16 +6,17 @@ import Metashape
 
 
 def export_images(root: Path, chunk):
-    directory = root / chunk.label
+    directory = root / "images" 
     if not os.path.exists(directory): os.mkdir(directory)
 
-    directory = directory / "images"
+    directory = directory / chunk.label
     if not os.path.exists(directory): os.mkdir(directory)
+
     
     print("Exporting images to: {0}".format(directory))
 
     for camera in chunk.cameras:
-        if not camera.transform:
+        if not camera.transform or not camera.enabled:
             continue
 
         filepath = directory / (camera.label + ".jpeg")        

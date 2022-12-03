@@ -6,12 +6,12 @@ import Metashape
 
 
 def export_fused_depth(root: Path, chunk):
-    directory = root / chunk.label
+    directory = root / "depth" 
     if not os.path.exists(directory): os.mkdir(directory)
 
-    directory = directory / "depth"
+    directory = directory / chunk.label
     if not os.path.exists(directory): os.mkdir(directory)
-    
+
     print("Exporting depth maps to: {0}".format(directory))
 
     for camera in chunk.cameras:
