@@ -6,9 +6,6 @@ import Metashape
 
 def export_depth(chunk, directory: Path):
     if not os.path.exists(directory): os.mkdir(directory)
-
-    directory = directory / "depth"
-    if not os.path.exists(directory): os.mkdir(directory)
     
     print("Exporting depth to: {0}".format(directory))
 
@@ -28,13 +25,10 @@ def export_depth(chunk, directory: Path):
             continue
 
         # Create depth image
-        depth_image = mesh.renderDepthMap(camera.transform,
-            camera.calibration)
-
+        depth_image = mesh.renderDepth(camera.transform,
+            camera.calibration, add_alpha=False)
         depth_image = depth_image.convert(" ", "F16")
 
-        # TODO: Transform to axis aligned coordinates
-       
         # Set up compression
         compr = Metashape.ImageCompression()
         compr.tiff_compression = \
@@ -47,9 +41,6 @@ def export_depth(chunk, directory: Path):
 def export_normal(chunk, directory: Path):
     if not os.path.exists(directory): os.mkdir(directory)
 
-    directory = directory / "normal"
-    if not os.path.exists(directory): os.mkdir(directory)
-    
     print("Exporting normals to: {0}".format(directory))
 
     # Get mesh
@@ -69,11 +60,13 @@ def export_normal(chunk, directory: Path):
 
         # Create normal image
         normal_image = mesh.renderNormalMap(camera.transform,
-            camera.calibration)
-
+            camera.calibration, add_alpha=False)
         normal_image = normal_image.convert("RGB", "F16")
 
         # TODO: Transform to axis aligned coordinates
+        rotation = camera.transform.rotation()
+
+        print(rotation)
        
         # Set up compression
         compr = Metashape.ImageCompression()
@@ -82,7 +75,7 @@ def export_normal(chunk, directory: Path):
 
         # Save image
         normal_image.save(filepath, compression=compr)
-
+        return
 
 def on_render_depth():
     app = Metashape.app
@@ -98,11 +91,10 @@ def on_render_normal():
     directory = Path(app.getExistingDirectory())
     export_normal(document.chunk, directory)
 
-
 def main():
     depth_label = "Scripts/Render depth images (mesh)"
     Metashape.app.removeMenuItem(depth_label)
-    Metashape.app.addMenuItem(depth_label, on_execute)
+    Metashape.app.addMenuItem(depth_label, on_render_depth)
 
     normal_label = "Scripts/Render normal images (mesh)"
     Metashape.app.removeMenuItem(normal_label)
