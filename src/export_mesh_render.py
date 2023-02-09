@@ -24,9 +24,10 @@ def export_depth(chunk, directory: Path):
         if os.path.exists(filepath):
             continue
 
-        # Create depth image
+        # Create depth image and convert to real values
         depth_image = mesh.renderDepth(camera.transform,
             camera.calibration, add_alpha=False)
+        depth_image = depth_image * chunk.transform.scale
         depth_image = depth_image.convert(" ", "F16")
 
         # Set up compression
