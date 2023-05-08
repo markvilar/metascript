@@ -20,7 +20,7 @@ def export_depth(chunk, directory: Path):
         if not camera.enabled:
             continue
 
-        filepath = str(directory / (camera.label + ".tif"))
+        filepath = str(directory / (camera.label + ".tiff"))
         if os.path.exists(filepath):
             continue
 
@@ -28,7 +28,6 @@ def export_depth(chunk, directory: Path):
         depth_image = mesh.renderDepth(camera.transform,
             camera.calibration, add_alpha=False)
         depth_image = depth_image * chunk.transform.scale
-        depth_image = depth_image.convert(" ", "F16")
 
         # Set up compression
         compr = Metashape.ImageCompression()
@@ -62,7 +61,7 @@ def export_normal(chunk, directory: Path):
         # Create normal image
         normal_image = mesh.renderNormalMap(camera.transform,
             camera.calibration, add_alpha=False)
-        normal_image = normal_image.convert("RGB", "F16")
+        normal_image = normal_image.convert("RGB", "F32")
 
         # TODO: Transform to axis aligned coordinates
         rotation = camera.transform.rotation()
